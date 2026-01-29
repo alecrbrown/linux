@@ -84,11 +84,13 @@
 /*
  * TXT Heap Table Enumeration
  */
-#define TXT_BIOS_DATA_TABLE		1
-#define TXT_OS_MLE_DATA_TABLE		2
-#define TXT_OS_SINIT_DATA_TABLE		3
-#define TXT_SINIT_MLE_DATA_TABLE	4
-#define TXT_SINIT_TABLE_MAX		TXT_SINIT_MLE_DATA_TABLE
+enum {
+	TXT_BIOS_DATA_TABLE,
+	TXT_OS_MLE_DATA_TABLE,
+	TXT_OS_SINIT_DATA_TABLE,
+	TXT_SINIT_MLE_DATA_TABLE,
+	TXT_SINIT_TABLE_MAX
+}
 
 #ifndef __ASSEMBLER__
 
@@ -250,50 +252,17 @@ struct tpm_event_log_header {
  *
  *  NOTE: the table size fields include the 8 byte size field itself.
  */
-static inline u64 txt_bios_data_size(void *heap)
-{
-	return *((u64 *)heap);
-}
 
-static inline void *txt_bios_data_start(void *heap)
+static inline void txt_parse_heap(void *heap, void *txt_heap_ptrs[TXT_SINIT_TABLE_MAX])
 {
-	return heap + sizeof(u64);
-}
+	void *tmp = heap;
 
-static inline u64 txt_os_mle_data_size(void *heap)
-{
-	return *((u64 *)(heap + txt_bios_data_size(heap)));
-}
+	for (u8 i; i < TXT_SINIT_TABLE_MAX; i++) {
+		u64 table_size = *((u64 *) tmp);
 
-static inline void *txt_os_mle_data_start(void *heap)
-{
-	return heap + txt_bios_data_size(heap) + sizeof(u64);
-}
-
-static inline u64 txt_os_sinit_data_size(void *heap)
-{
-	return *((u64 *)(heap + txt_bios_data_size(heap) +
-			txt_os_mle_data_size(heap)));
-}
-
-static inline void *txt_os_sinit_data_start(void *heap)
-{
-	return heap + txt_bios_data_size(heap) +
-		txt_os_mle_data_size(heap) + sizeof(u64);
-}
-
-static inline u64 txt_sinit_mle_data_size(void *heap)
-{
-	return *((u64 *)(heap + txt_bios_data_size(heap) +
-			txt_os_mle_data_size(heap) +
-			txt_os_sinit_data_size(heap)));
-}
-
-static inline void *txt_sinit_mle_data_start(void *heap)
-{
-	return heap + txt_bios_data_size(heap) +
-		txt_os_mle_data_size(heap) +
-		txt_os_sinit_data_size(heap) + sizeof(u64);
+		txt_heap_ptrs[i] = tmp + sizeof(table_size);
+		tmp += table_size;
+	}
 }
 
 /*
