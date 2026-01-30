@@ -265,6 +265,8 @@ static inline void txt_parse_heap(void *heap, void *txt_heap_ptrs[TXT_SINIT_TABL
 	}
 }
 
+#define ptr_after(elem) ((void *)elem + sizeof(elem))
+
 /*
  * Find the TPM v2 event log element in the TXT heap. This element contains
  * the information about the size and location of the DRTM event log. Note
@@ -279,13 +281,11 @@ txt_find_log2_1_element(struct txt_os_sinit_data *os_sinit_data)
 	struct txt_heap_ext_data_element *ext_elem;
 
 	/* The extended element array is at the end of this table */
-	ext_elem = (struct txt_heap_ext_data_element *)
-		((u8 *)os_sinit_data + sizeof(struct txt_os_sinit_data));
+	ext_elem = (struct txt_heap_ext_data_element *) ptr_after(os_sinit_data);
 
 	while (ext_elem->type != TXT_HEAP_EXTDATA_TYPE_END) {
 		if (ext_elem->type == TXT_HEAP_EXTDATA_TYPE_EVENT_LOG_POINTER2_1) {
-			return (struct txt_heap_event_log_pointer2_1_element *)
-				((u8 *)ext_elem + sizeof(struct txt_heap_ext_data_element));
+			return (struct txt_heap_event_log_pointer2_1_element *) ptr_after(ext_elem);
 		}
 		ext_elem = (struct txt_heap_ext_data_element *)
 			    ((u8 *)ext_elem + ext_elem->size);
