@@ -82,14 +82,9 @@ static inline u64 sl_rdmsr(u32 reg)
 	return m.q;
 }
 
-static struct slr_table *sl_locate_and_validate_slrt(void)
+static struct slr_table *sl_locate_and_validate_slrt(struct txt_os_mle_data *os_mle_data)
 {
-	struct txt_os_mle_data *os_mle_data;
 	struct slr_table *slrt;
-	void *txt_heap;
-
-	txt_heap = (void *)sl_txt_read(TXT_CR_HEAP_BASE);
-	os_mle_data = txt_os_mle_data_start(txt_heap);
 
 	if (!os_mle_data->slrt)
 		sl_txt_reset(SL_ERROR_INVALID_SLRT);
@@ -112,6 +107,7 @@ static struct slr_table *sl_locate_and_validate_slrt(void)
  */
 static void sl_check_pmr_coverage(void *base, u32 size, bool allow_hi)
 {
+	void *txt_heap_ptrs[TXT_SINIT_TABLE_MAX];
 	struct txt_os_sinit_data *os_sinit_data;
 	void *end = base + size;
 	void *txt_heap;
@@ -120,7 +116,8 @@ static void sl_check_pmr_coverage(void *base, u32 size, bool allow_hi)
 		return;
 
 	txt_heap = (void *)sl_txt_read(TXT_CR_HEAP_BASE);
-	os_sinit_data = txt_os_sinit_data_start(txt_heap);
+	txt_parse_heap(txt_heap);
+	os_sinit_data = txt_heap_ptrs[TXT_OS_SINIT_DATA_TABLE];
 
 	if ((u64)end >= SZ_4G && (u64)base < SZ_4G)
 		sl_txt_reset(SL_ERROR_REGION_STRADDLE_4GB);
@@ -186,11 +183,9 @@ static void sl_txt_validate_msrs(struct txt_os_mle_data *os_mle_data)
 		sl_txt_reset(SL_ERROR_MSR_INV_MISC_EN);
 }
 
-static void sl_find_drtm_event_log(struct slr_table *slrt)
+static void sl_find_drtm_event_log(struct slr_table *slrt, struct txt_os_sinit_data *os_sinit_data)
 {
-	struct txt_os_sinit_data *os_sinit_data;
 	struct slr_entry_log_info *log_info;
-	void *txt_heap;
 
 	log_info = slr_next_entry_by_tag(slrt, NULL, SLR_ENTRY_LOG_INFO);
 	if (!log_info)
@@ -199,13 +194,10 @@ static void sl_find_drtm_event_log(struct slr_table *slrt)
 	evtlog_base = (void *)log_info->addr;
 	evtlog_size = log_info->size;
 
-	txt_heap = (void *)sl_txt_read(TXT_CR_HEAP_BASE);
-
 	/*
 	 * For TPM 2.0, the TXT event log 2.1 extended data structure has to also
-	 * be located to find the actual log.
+	 * be located to find the actual log. TODO: Move this comment
 	 */
-	os_sinit_data = txt_os_sinit_data_start(txt_heap);
 
 	/*
 	 * Only support version 6 and later that properly handle the
@@ -222,20 +214,17 @@ static void sl_find_drtm_event_log(struct slr_table *slrt)
 		tpm_log_ver = SL_TPM2_LOG;
 }
 
-static void sl_validate_event_log_buffer(void)
+static void sl_validate_event_log_buffer(void *txt_heap, struct txt_os_sinit_data *os_sinit_data)
 {
-	struct txt_os_sinit_data *os_sinit_data;
-	void *txt_heap, *txt_end;
 	void *mle_base, *mle_end;
 	void *evtlog_end;
+	void *txt_end;
 
 	if ((u64)evtlog_size > (LLONG_MAX - (u64)evtlog_base))
 		sl_txt_reset(SL_ERROR_INTEGER_OVERFLOW);
 	evtlog_end = evtlog_base + evtlog_size;
 
-	txt_heap = (void *)sl_txt_read(TXT_CR_HEAP_BASE);
 	txt_end = txt_heap + sl_txt_read(TXT_CR_HEAP_SIZE);
-	os_sinit_data = txt_os_sinit_data_start(txt_heap);
 
 	mle_base = (void *)(u64)sl_mle_start;
 	mle_end = mle_base + os_sinit_data->mle_size;
@@ -475,17 +464,11 @@ static void sl_extend_slrt(struct slr_policy_entry *entry)
 	}
 }
 
-static void sl_extend_txt_os2mle(struct slr_policy_entry *entry)
+static void sl_extend_txt_os2mle(struct slr_policy_entry *entry, struct txt_os_mle_data *os_mle_data)
 {
-	struct txt_os_mle_data *os_mle_data;
-	void *txt_heap;
-
-	txt_heap = (void *)sl_txt_read(TXT_CR_HEAP_BASE);
-	os_mle_data = txt_os_mle_data_start(txt_heap);
-
 	/*
 	 * Version 1 of the OS-MLE heap structure has no fields to measure. It just
-	 * has addresses and sizes and a scratch buffer.
+	 * has addresses and sizes and a scratch buffer. TODO: Do we need this function?
 	 */
 	if (os_mle_data->version == 1)
 		return;
@@ -495,7 +478,7 @@ static void sl_extend_txt_os2mle(struct slr_policy_entry *entry)
  * Process all policy entries and extend the measurements to the evtlog. Note
  * that some entries need special processing which is done in subroutines.
  */
-static void sl_process_extend_policy(struct slr_table *slrt)
+static void sl_process_extend_policy(struct slr_table *slrt, struct txt_os_mle_data *os_mle_data)
 {
 	struct slr_entry_policy *policy;
 	u16 i;
@@ -513,7 +496,7 @@ static void sl_process_extend_policy(struct slr_table *slrt)
 			sl_extend_slrt(&policy->policy_entries[i]);
 			break;
 		case SLR_ET_TXT_OS2MLE:
-			sl_extend_txt_os2mle(&policy->policy_entries[i]);
+			sl_extend_txt_os2mle(&policy->policy_entries[i], os_mle_data);
 			break;
 		case SLR_ET_UNUSED:
 			continue;
@@ -556,6 +539,7 @@ asmlinkage __visible void sl_check_region(void *base, u32 size)
 asmlinkage __visible void sl_main(void *bootparams)
 {
 	struct boot_params *bp = (struct boot_params *)bootparams;
+	void *txt_heap_ptrs[TXT_SINIT_TABLE_MAX];
 	struct txt_os_mle_data *os_mle_data;
 	struct slr_table *slrt;
 	void *txt_heap;
@@ -574,14 +558,18 @@ asmlinkage __visible void sl_main(void *bootparams)
 	if (!(sl_cpu_type & SL_CPU_INTEL))
 		return;
 
+	/* Acquire the pointers for each table in the TXT heap */
+	txt_heap = (void *)sl_txt_read(TXT_CR_HEAP_BASE);
+	txt_parse_heap(txt_heap, txt_heap_ptrs);
+
 	/* Find the SLRT setup by the pre-launch stage */
-	slrt = sl_locate_and_validate_slrt();
+	slrt = sl_locate_and_validate_slrt(txt_heap_ptrs[TXT_OS_MLE_DATA_TABLE]);
 
 	/* Locate the TPM event log. */
-	sl_find_drtm_event_log(slrt);
+	sl_find_drtm_event_log(slrt, txt_heap_ptrs[TXT_OS_SINIT_DATA_TABLE]);
 
 	/* Validate the location of the event log buffer before using it */
-	sl_validate_event_log_buffer();
+	sl_validate_event_log_buffer(txt_heap, txt_heap_ptrs[TXT_OS_SINIT_DATA_TABLE]);
 
 	/*
 	 * Find the TPM hash algorithms used by the ACM and recorded in the
@@ -620,18 +608,14 @@ asmlinkage __visible void sl_main(void *bootparams)
 	 * Extend measurements into the TPM for entities specified in the
 	 * SLRT policies.
 	 */
-	sl_process_extend_policy(slrt);
+	sl_process_extend_policy(slrt, txt_heap_ptrs[TXT_OS_MLE_DATA_TABLE]);
 	sl_process_extend_uefi_config(slrt);
-
-	/* No PMR check is needed, the TXT heap is covered by the DPR */
-	txt_heap = (void *)sl_txt_read(TXT_CR_HEAP_BASE);
-	os_mle_data = txt_os_mle_data_start(txt_heap);
 
 	/*
 	 * Now that the OS-MLE data is measured, ensure the MTRR and
 	 * misc enable MSRs are what we expect.
 	 */
-	sl_txt_validate_msrs(os_mle_data);
+	sl_txt_validate_msrs(txt_heap_ptrs[TXT_OS_MLE_DATA_TABLE]);
 
 	/* Shut down early TPM driver, release localities */
 	early_tpm_fini(&chip);
