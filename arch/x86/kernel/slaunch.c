@@ -117,14 +117,14 @@ static void __init *txt_early_get_heap_table(void __iomem *txt, u32 type,
 	void *heap;
 	int i;
 
-	if (type > TXT_SINIT_TABLE_MAX)
+	if (type >= TXT_SINIT_TABLE_MAX)
 		slaunch_reset(txt, "Error invalid table type for early heap walk\n", SL_ERROR_HEAP_WALK);
 
 	memcpy_fromio(&base, txt + TXT_CR_HEAP_BASE, sizeof(base));
 	memcpy_fromio(&size, txt + TXT_CR_HEAP_SIZE, sizeof(size));
 
 	/* Iterate over heap tables looking for table of "type" */
-	for (i = 0; i < type; i++) {
+	for (i = 0; i <= type; i++) {
 		base += offset;
 		heap = early_memremap(base, sizeof(u64));
 		if (!heap)
