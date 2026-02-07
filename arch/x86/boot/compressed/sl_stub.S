@@ -151,7 +151,7 @@ SYM_FUNC_START(sl_stub_entry)
 	movl	SL_boot_params_addr(%edi), %esi
 
 	/* Save %ebx so the APs can find their way home */
-	movl	%ebx, (SL_mle_scratch + SL_SCRATCH_AP_EBX)(%eax)
+	movl	%ebx, (SL_mle_scratch + SL_scratch_ap_ebx)(%eax)
 
 	/* Fetch the AP wake code block address from the heap */
 	movl	SL_ap_wake_block(%eax), %edi
@@ -159,11 +159,11 @@ SYM_FUNC_START(sl_stub_entry)
 
 	/* Store the offset in the AP wake block to the jmp address */
 	movl	$(sl_ap_jmp_offset - sl_txt_ap_wake_begin), \
-		(SL_mle_scratch + SL_SCRATCH_AP_JMP_OFFSET)(%eax)
+		(SL_mle_scratch + SL_scratch_ap_jmp_offset)(%eax)
 
 	/* Store the offset in the AP wake block to the AP stacks block */
 	movl	$(sl_stacks - sl_txt_ap_wake_begin), \
-		(SL_mle_scratch + SL_SCRATCH_AP_STACKS_OFFSET)(%eax)
+		(SL_mle_scratch + SL_scratch_ap_stacks_offset)(%eax)
 
 	/* %eax still is the base of the OS-MLE block, save it */
 	pushl	%eax
@@ -340,7 +340,7 @@ SYM_FUNC_START(sl_txt_ap_entry)
 	leal	8(%eax, %ecx), %eax
 
 	/* Saved %ebx from the BSP and stash OS-MLE pointer */
-	movl	(SL_mle_scratch + SL_SCRATCH_AP_EBX)(%eax), %ebx
+	movl	(SL_mle_scratch + SL_scratch_ap_ebx)(%eax), %ebx
 
 	/* Save TXT info ptr in %edi for call to sl_txt_load_regs */
 	movl	SL_txt_info(%eax), %edi

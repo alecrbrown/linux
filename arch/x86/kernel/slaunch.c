@@ -114,37 +114,25 @@ void __noreturn slaunch_reset(void *ctx, const char *msg, u64 error)
 static void __init *txt_early_get_heap_table(void __iomem *txt, u32 type,
 					     u32 bytes)
 {
-	u64 base, size, offset = 0;
+	struct sl_txt_scratch_block mle_scratch;
+	u64 base, offset = 0;
 	void *heap;
-	int i;
 
-	if (type > TXT_SINIT_TABLE_MAX)
+	if (type >= TXT_SINIT_TABLE_MAX)
 		slaunch_reset(txt, "Error invalid table type for early heap walk\n", SL_ERROR_HEAP_WALK);
 
 	memcpy_fromio(&base, txt + TXT_CR_HEAP_BASE, sizeof(base));
-	memcpy_fromio(&size, txt + TXT_CR_HEAP_SIZE, sizeof(size));
 
-	/* Iterate over heap tables looking for table of "type" */
-	for (i = 0; i < type; i++) {
-		base += offset;
-		heap = early_memremap(base, sizeof(u64));
-		if (!heap)
-			slaunch_reset(txt, "Error early_memremap of heap for heap walk\n", SL_ERROR_HEAP_MAP);
+	/*
+	 * TXT heap table offsets are stored as the first setup_data entry.
+	 * We can use that to avoid parsing the TXT heap again.
+	 */
+	struct txt_heap_info heap_info[TXT_SINIT_TABLE_MAX];
+	mle_scratch = (struct sl_txt_scratch_block *)boot_params.setup_data;
+	heap_info = (struct txt_heap_info)mle_scratch->heap_map;
+	offset = heap_info[type].offset;
 
-		offset = *((u64 *)heap);
-
-		/*
-		 * After the first iteration, any offset of zero is invalid and
-		 * implies the TXT heap is corrupted.
-		 */
-		if (!offset)
-			slaunch_reset(txt, "Error invalid 0 offset in heap walk\n", SL_ERROR_HEAP_ZERO_OFFSET);
-
-		early_memunmap(heap, sizeof(u64));
-	}
-
-	/* Skip the size field at the head of each table */
-	base += sizeof(u64);
+	base += offset;
 	heap = early_memremap(base, bytes);
 	if (!heap)
 		slaunch_reset(txt, "Error early_memremap of heap section\n", SL_ERROR_HEAP_MAP);

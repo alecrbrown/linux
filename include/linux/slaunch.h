@@ -117,6 +117,18 @@ struct sl_ap_wake_info {
 };
 
 /*
+ * MLE scratch area structure.
+ */
+struct sl_txt_scratch_block {
+	struct setup_data hdr;
+	u32 ap_ebx;
+	u32 ap_jmp_offset;
+	u32 ap_stacks_offset;
+	u32 reserved1;
+	u8 heap_map[];
+} __packed;
+
+/*
  * Secure Launch defined OS/MLE TXT Heap table
  *
  * This table is defined at the top level by the TXT specification
@@ -132,8 +144,13 @@ struct txt_os_mle_data {
 	u64 txt_info;
 	u32 ap_wake_block;
 	u32 ap_wake_block_size;
-	u8 mle_scratch[64];
+	u8 mle_scratch[128];
 } __packed;
+
+/*
+ * Setup sl_txt_scratch_block in txt_os_mle_data
+ */
+//static inline void txt_os_mle_scratch_setup (, u8 heap_map[]);
 
 #ifdef CONFIG_SECURE_LAUNCH
 

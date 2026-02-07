@@ -413,6 +413,10 @@ SYM_CODE_START(startup_64)
 	popfq
 
 #ifdef CONFIG_SECURE_LAUNCH
+	/* Obtain secure launch heap table info for boot params */
+	movq	%r15, %rdi
+	callq	sl_init
+
 	/* Ensure the relocation region is covered by a PMR */
 	movq	%rbx, %rdi
 	movl	$(_bss - startup_32), %esi

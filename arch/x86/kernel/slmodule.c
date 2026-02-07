@@ -259,7 +259,13 @@ static void slaunch_intel_evtlog(void __iomem *txt)
 	if (!txt_heap)
 		slaunch_reset(txt, "Error failed to memremap TXT heap\n", SL_ERROR_HEAP_MAP);
 
-	params = (struct txt_os_mle_data *)txt_os_mle_data_start(txt_heap);
+	struct sl_txt_scratch_block mle_scratch;
+	struct txt_heap_info heap_info[TXT_SINIT_TABLE_MAX];
+        mle_scratch = (struct sl_txt_scratch_block *)boot_params.setup_data;
+        heap_info = (struct txt_heap_info)mle_scratch->heap_map;
+
+	params = (struct txt_os_mle_data *)txt_heap + heap_info[TXT_OS_MLE_DATA_TABLE].offset;
+	//params = (struct txt_os_mle_data *)txt_os_mle_data_start(txt_heap);
 
 	/* Get the SLRT and remap it */
 	slrt = memremap(params->slrt, sizeof(*slrt), MEMREMAP_WB);
@@ -288,7 +294,8 @@ static void slaunch_intel_evtlog(void __iomem *txt)
 		return; /* looks like it is not 2.0 */
 
 	/* For TPM 2.0 logs, the extended heap element must be located */
-	os_sinit_data = txt_os_sinit_data_start(txt_heap);
+	os_sinit_data = (void *)txt_heap + heap_info[TXT_OS_SINIT_DATA_TABLE].offset;
+	//os_sinit_data = txt_os_sinit_data_start(txt_heap);
 
 	evtlog21 = txt_find_log2_1_element(os_sinit_data);
 

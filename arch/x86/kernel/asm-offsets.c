@@ -134,6 +134,10 @@ static void __used common(void)
 	BLANK();
 	OFFSET(SL_txt_info, txt_os_mle_data, txt_info);
 	OFFSET(SL_mle_scratch, txt_os_mle_data, mle_scratch);
+	OFFSET(SL_scratch_ap_ebx, sl_txt_scratch_block, ap_ebx);
+	OFFSET(SL_scratch_ap_jmp_offset, sl_txt_scratch_block, ap_jmp_offset);
+	OFFSET(SL_scratch_ap_stacks_offset, sl_txt_scratch_block, ap_stacks_offset);
+	OFFSET(SL_scratch_heap_map, sl_txt_scratch_block, heap_map);
 	OFFSET(SL_ap_wake_block, txt_os_mle_data, ap_wake_block);
 	OFFSET(SL_ap_wake_block_size, txt_os_mle_data, ap_wake_block_size);
 	OFFSET(SL_boot_params_addr, slr_entry_intel_info, boot_params_addr);
