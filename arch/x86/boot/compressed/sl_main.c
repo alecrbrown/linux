@@ -31,7 +31,7 @@ static u32 tpm_num_algs;
 static struct tcg_efi_specid_event_algs *tpm_algs;
 static u8 event_buf[PAGE_SIZE];
 static void *txt_heap;
-static struct txt_heap_info txt_heap_info[TXT_SINIT_TABLE_MAX];
+static struct txt_heap_info *txt_heap_info[TXT_SINIT_TABLE_MAX];
 
 
 /* Simple instance of a TPM chip object */
@@ -81,9 +81,12 @@ static inline u64 sl_rdmsr(u32 reg)
 	return m.q;
 }
 
-static struct slr_table *sl_locate_and_validate_slrt(struct txt_os_mle_data *os_mle_data)
+static struct slr_table *sl_locate_and_validate_slrt(void)
 {
+	struct txt_os_mle_data *os_mle_data;
 	struct slr_table *slrt;
+
+	os_mle_data = txt_heap + txt_heap_info[TXT_OS_MLE_DATA_TABLE]->offset;
 
 	if (!os_mle_data->slrt)
 		sl_txt_reset(SL_ERROR_INVALID_SLRT);
@@ -178,9 +181,12 @@ static void sl_txt_validate_msrs(struct txt_os_mle_data *os_mle_data)
 		sl_txt_reset(SL_ERROR_MSR_INV_MISC_EN);
 }
 
-static void sl_find_drtm_event_log(struct slr_table *slrt, struct txt_os_sinit_data *os_sinit_data)
+static void sl_find_drtm_event_log(struct slr_table *slrt)
 {
+	struct txt_os_sinit_data *os_sinit_data;
 	struct slr_entry_log_info *log_info;
+
+	os_sinit_data = txt_heap + txt_heap_info[TXT_OS_SINIT_DATA_TABLE]->offset;
 
 	log_info = slr_next_entry_by_tag(slrt, NULL, SLR_ENTRY_LOG_INFO);
 	if (!log_info)
@@ -204,9 +210,9 @@ static void sl_find_drtm_event_log(struct slr_table *slrt, struct txt_os_sinit_d
 		tpm_log_ver = SL_TPM2_LOG;
 }
 
-static void sl_validate_event_log_buffer()
+static void sl_validate_event_log_buffer(void)
 {
-	struct txt_os_sinit_data *os_sinit_data
+	struct txt_os_sinit_data *os_sinit_data;
 	void *mle_base, *mle_end;
 	void *evtlog_end;
 	void *txt_end;
@@ -550,7 +556,7 @@ asmlinkage __visible void sl_init(void *bootparams)
         txt_mle_scratch->heap_map = (u8 *)txt_heap_info;
 
 	/* Add the scratch block to the start of the boot_params setup_data linked list */
-        bp->hdr.setup_data = (struct setup_data *)txt_mle_scratch;
+        bp->hdr.setup_data = (u64)txt_mle_scratch;
 }
 
 asmlinkage __visible void sl_check_region(void *base, u32 size)

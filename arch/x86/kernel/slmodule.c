@@ -20,6 +20,7 @@
 #include <linux/tpm.h>
 #include <asm/segment.h>
 #include <asm/sections.h>
+#include <asm/setup.h>
 #include <crypto/sha2.h>
 #include <linux/slr_table.h>
 #include <linux/slaunch.h>
@@ -259,10 +260,10 @@ static void slaunch_intel_evtlog(void __iomem *txt)
 	if (!txt_heap)
 		slaunch_reset(txt, "Error failed to memremap TXT heap\n", SL_ERROR_HEAP_MAP);
 
-	struct sl_txt_scratch_block mle_scratch;
-	struct txt_heap_info heap_info[TXT_SINIT_TABLE_MAX];
-        mle_scratch = (struct sl_txt_scratch_block *)boot_params.setup_data;
-        heap_info = (struct txt_heap_info)mle_scratch->heap_map;
+	struct sl_txt_scratch_block *mle_scratch;
+	struct txt_heap_info *heap_info;
+	mle_scratch = (struct sl_txt_scratch_block *)boot_params.hdr.setup_data;
+	heap_info = (struct txt_heap_info *)mle_scratch->heap_map;
 
 	params = (struct txt_os_mle_data *)txt_heap + heap_info[TXT_OS_MLE_DATA_TABLE].offset;
 	//params = (struct txt_os_mle_data *)txt_os_mle_data_start(txt_heap);

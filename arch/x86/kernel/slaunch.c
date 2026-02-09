@@ -114,7 +114,7 @@ void __noreturn slaunch_reset(void *ctx, const char *msg, u64 error)
 static void __init *txt_early_get_heap_table(void __iomem *txt, u32 type,
 					     u32 bytes)
 {
-	struct sl_txt_scratch_block mle_scratch;
+	struct sl_txt_scratch_block *mle_scratch;
 	u64 base, offset = 0;
 	void *heap;
 
@@ -127,9 +127,9 @@ static void __init *txt_early_get_heap_table(void __iomem *txt, u32 type,
 	 * TXT heap table offsets are stored as the first setup_data entry.
 	 * We can use that to avoid parsing the TXT heap again.
 	 */
-	struct txt_heap_info heap_info[TXT_SINIT_TABLE_MAX];
-	mle_scratch = (struct sl_txt_scratch_block *)boot_params.setup_data;
-	heap_info = (struct txt_heap_info)mle_scratch->heap_map;
+	struct txt_heap_info *heap_info;
+	mle_scratch = (struct sl_txt_scratch_block *)boot_params.hdr.setup_data;
+	heap_info = (struct txt_heap_info *)mle_scratch->heap_map;
 	offset = heap_info[type].offset;
 
 	base += offset;

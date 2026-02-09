@@ -95,6 +95,7 @@
 
 #include <linux/io.h>
 #include <linux/tpm_eventlog.h>
+#include <asm/setup_data.h>
 
 /*
  * Secure Launch AP stack and monitor block
