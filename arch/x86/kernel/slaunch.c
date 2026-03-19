@@ -51,6 +51,20 @@ struct sl_ap_wake_info *slaunch_get_ap_wake_info(void)
 	return &ap_wake_info;
 }
 
+struct txt_heap_info *__pi_sl_txt_get_heap_map(void);
+
+struct txt_heap_info *__init slaunch_txt_get_heap_map(void)
+{
+	return __pi_sl_txt_get_heap_map();
+}
+
+void *__pi_sl_txt_get_heap_table(void *heap, u8 index);
+
+void *__init slaunch_txt_get_heap_table(void *heap, u8 index)
+{
+	return __pi_sl_txt_get_heap_table(heap, index);
+}
+
 /*
  * On Intel platforms, TXT passes a safe copy of the DMAR ACPI table to the
  * DRTM. The DRTM is supposed to use this instead of the one found in the
@@ -115,37 +129,18 @@ void __noreturn slaunch_reset(void *ctx, const char *msg, u64 error)
 static void __init *txt_early_get_heap_table(void __iomem *txt, u32 type,
 					     u32 bytes)
 {
-	u64 base, size, offset = 0;
+	struct txt_heap_info *heap_map;
 	void *heap;
-	int i;
+	u64 base;
 
-	if (type > TXT_SINIT_TABLE_MAX)
+	if (type >= TXT_SINIT_TABLE_MAX)
 		slaunch_reset(txt, "Error invalid table type for early heap walk\n", SL_ERROR_HEAP_WALK);
 
 	memcpy_fromio(&base, txt + TXT_CR_HEAP_BASE, sizeof(base));
-	memcpy_fromio(&size, txt + TXT_CR_HEAP_SIZE, sizeof(size));
 
-	/* Iterate over heap tables looking for table of "type" */
-	for (i = 0; i < type; i++) {
-		base += offset;
-		heap = early_memremap(base, sizeof(u64));
-		if (!heap)
-			slaunch_reset(txt, "Error early_memremap of heap for heap walk\n", SL_ERROR_HEAP_MAP);
+	heap_map = slaunch_txt_get_heap_map();
+	base += heap_map[type].offset;
 
-		offset = *((u64 *)heap);
-
-		/*
-		 * After the first iteration, any offset of zero is invalid and
-		 * implies the TXT heap is corrupted.
-		 */
-		if (!offset)
-			slaunch_reset(txt, "Error invalid 0 offset in heap walk\n", SL_ERROR_HEAP_ZERO_OFFSET);
-
-		early_memunmap(heap, sizeof(u64));
-	}
-
-	/* Skip the size field at the head of each table */
-	base += sizeof(u64);
 	heap = early_memremap(base, bytes);
 	if (!heap)
 		slaunch_reset(txt, "Error early_memremap of heap section\n", SL_ERROR_HEAP_MAP);

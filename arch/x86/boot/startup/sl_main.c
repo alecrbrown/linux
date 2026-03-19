@@ -40,6 +40,32 @@ static struct slr_table *slrt __initdata;
 u32 sl_cpu_type __initdata;
 u32 sl_mle_start __initdata;
 
+static void *txt_heap __initdata;
+static struct txt_heap_info txt_heap_map[TXT_SINIT_TABLE_MAX] __initdata;
+
+struct txt_heap_info * __init sl_txt_get_heap_map(void);
+void * __init sl_txt_get_heap_table(void *heap, u8 index);
+
+struct txt_heap_info * __init sl_txt_get_heap_map(void)
+{
+	return txt_heap_map;
+}
+
+void * __init sl_txt_get_heap_table(void *heap, u8 index)
+{
+	return heap + txt_heap_map[index].offset;
+}
+
+static void __init txt_parse_heap_map(void *heap)
+{
+	void *tmp = heap;
+	for (u8 i = 0; i < TXT_SINIT_TABLE_MAX; i++) {
+		txt_heap_map[i].size = *((u64 *) tmp);
+		txt_heap_map[i].offset = tmp - heap + sizeof(txt_heap_map[i].size);
+		tmp += txt_heap_map[i].size;
+	}
+}
+
 void sl_main(void *bootparams);
 
 static void *txt_regs = (void *)TXT_PRIV_CONFIG_REGS_BASE;
@@ -80,10 +106,8 @@ static struct slr_table *__init sl_locate_and_validate_slrt(void)
 {
 	struct txt_os_mle_data *os_mle_data;
 	struct slr_table *slrt;
-	void *txt_heap;
 
-	txt_heap = (void *)sl_txt_read(TXT_CR_HEAP_BASE);
-	os_mle_data = txt_os_mle_data_start(txt_heap);
+	os_mle_data = sl_txt_get_heap_table(txt_heap, TXT_OS_MLE_DATA_TABLE);
 
 	if (!os_mle_data->slrt)
 		sl_txt_reset(SL_ERROR_INVALID_SLRT);
@@ -108,13 +132,11 @@ static void __init sl_check_pmr_coverage(void *base, u32 size, bool allow_hi)
 {
 	struct txt_os_sinit_data *os_sinit_data;
 	void *end = base + size;
-	void *txt_heap;
 
 	if (!(sl_cpu_type & SL_CPU_INTEL))
 		return;
 
-	txt_heap = (void *)sl_txt_read(TXT_CR_HEAP_BASE);
-	os_sinit_data = txt_os_sinit_data_start(txt_heap);
+	os_sinit_data = sl_txt_get_heap_table(txt_heap, TXT_OS_SINIT_DATA_TABLE);
 
 	if ((u64)end >= SZ_4G && (u64)base < SZ_4G)
 		sl_txt_reset(SL_ERROR_REGION_STRADDLE_4GB);
@@ -184,7 +206,6 @@ static void __init sl_find_drtm_event_log(struct slr_table *slrt)
 {
 	struct txt_os_sinit_data *os_sinit_data;
 	struct slr_entry_log_info *log_info;
-	void *txt_heap;
 
 	log_info = slr_next_entry_by_tag(slrt, NULL, SLR_ENTRY_LOG_INFO);
 	if (!log_info)
@@ -193,13 +214,11 @@ static void __init sl_find_drtm_event_log(struct slr_table *slrt)
 	evtlog_base = (void *)log_info->addr;
 	evtlog_size = log_info->size;
 
-	txt_heap = (void *)sl_txt_read(TXT_CR_HEAP_BASE);
-
 	/*
 	 * For TPM 2.0, the TXT event log 2.1 extended data structure has to also
 	 * be located to find the actual log.
 	 */
-	os_sinit_data = txt_os_sinit_data_start(txt_heap);
+	os_sinit_data = sl_txt_get_heap_table(txt_heap, TXT_OS_SINIT_DATA_TABLE);
 
 	/*
 	 * Only support version 6 and later that properly handle the
@@ -219,17 +238,16 @@ static void __init sl_find_drtm_event_log(struct slr_table *slrt)
 static void __init sl_validate_event_log_buffer(void)
 {
 	struct txt_os_sinit_data *os_sinit_data;
-	void *txt_heap, *txt_end;
 	void *mle_base, *mle_end;
 	void *evtlog_end;
+	void *txt_end;
 
 	if ((u64)evtlog_size > (LLONG_MAX - (u64)evtlog_base))
 		sl_txt_reset(SL_ERROR_INTEGER_OVERFLOW);
 	evtlog_end = evtlog_base + evtlog_size;
 
-	txt_heap = (void *)sl_txt_read(TXT_CR_HEAP_BASE);
 	txt_end = txt_heap + sl_txt_read(TXT_CR_HEAP_SIZE);
-	os_sinit_data = txt_os_sinit_data_start(txt_heap);
+	os_sinit_data = sl_txt_get_heap_table(txt_heap, TXT_OS_SINIT_DATA_TABLE);
 
 	mle_base = (void *)(u64)sl_mle_start;
 	mle_end = mle_base + os_sinit_data->mle_size;
@@ -487,10 +505,8 @@ static void __init sl_extend_slrt(struct slr_policy_entry *entry)
 static void __init sl_extend_txt_os2mle(struct slr_policy_entry *entry)
 {
 	struct txt_os_mle_data *os_mle_data;
-	void *txt_heap;
 
-	txt_heap = (void *)sl_txt_read(TXT_CR_HEAP_BASE);
-	os_mle_data = txt_os_mle_data_start(txt_heap);
+	os_mle_data = sl_txt_get_heap_table(txt_heap, TXT_OS_MLE_DATA_TABLE);
 
 	/*
 	 * Version 1 of the OS-MLE heap structure has no fields to measure. It just
@@ -575,7 +591,6 @@ asmlinkage __visible __init void sl_main(void *bootparams)
 {
 	struct boot_params *bp = (struct boot_params *)bootparams;
 	struct txt_os_mle_data *os_mle_data;
-	void *txt_heap;
 
 	/*
 	 * Ensure loadflags do not indicate a secure launch was done
@@ -590,6 +605,9 @@ asmlinkage __visible __init void sl_main(void *bootparams)
 	 */
 	if (!(sl_cpu_type & SL_CPU_INTEL))
 		return;
+
+	txt_heap = (void *)sl_txt_read(TXT_CR_HEAP_BASE);
+	txt_parse_heap_map(txt_heap);
 
 	/* Find the SLRT setup by the pre-launch stage */
 	slrt = sl_locate_and_validate_slrt();
@@ -648,8 +666,7 @@ asmlinkage __visible __init void sl_main(void *bootparams)
 	sl_process_extend_uefi_config(slrt, true);
 
 	/* No PMR check is needed, the TXT heap is covered by the DPR */
-	txt_heap = (void *)sl_txt_read(TXT_CR_HEAP_BASE);
-	os_mle_data = txt_os_mle_data_start(txt_heap);
+	os_mle_data = sl_txt_get_heap_table(txt_heap, TXT_OS_MLE_DATA_TABLE);
 
 	/*
 	 * Now that the OS-MLE data is measured, ensure the MTRR and

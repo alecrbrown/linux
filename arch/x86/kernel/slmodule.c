@@ -244,7 +244,7 @@ static void slaunch_teardown_securityfs(void)
 	securityfs_remove(slaunch_dir);
 }
 
-static void slaunch_intel_evtlog(void __iomem *txt)
+static void __init slaunch_intel_evtlog(void __iomem *txt)
 {
 	struct slr_entry_log_info *log_info;
 	struct txt_os_mle_data *params;
@@ -260,7 +260,7 @@ static void slaunch_intel_evtlog(void __iomem *txt)
 	if (!txt_heap)
 		slaunch_reset(txt, "Error failed to memremap TXT heap\n", SL_ERROR_HEAP_MAP);
 
-	params = (struct txt_os_mle_data *)txt_os_mle_data_start(txt_heap);
+	params = (struct txt_os_mle_data *)slaunch_txt_get_heap_table(txt_heap, TXT_OS_MLE_DATA_TABLE);
 
 	/* Get the SLRT and remap it */
 	slrt = memremap(params->slrt, sizeof(*slrt), MEMREMAP_WB);
@@ -289,7 +289,7 @@ static void slaunch_intel_evtlog(void __iomem *txt)
 		return; /* looks like it is not 2.0 */
 
 	/* For TPM 2.0 logs, the extended heap element must be located */
-	os_sinit_data = txt_os_sinit_data_start(txt_heap);
+	os_sinit_data = slaunch_txt_get_heap_table(txt_heap, TXT_OS_SINIT_DATA_TABLE);
 
 	evtlog21 = txt_find_log2_1_element(os_sinit_data);
 
@@ -304,7 +304,7 @@ static void slaunch_intel_evtlog(void __iomem *txt)
 	efi_head = (struct tcg_efi_specid_event_head *)(sl_evtlog.addr + sizeof(struct tcg_pcr_event));
 }
 
-static void slaunch_tpm_open_locality2(void __iomem *txt)
+static void __init slaunch_tpm_open_locality2(void __iomem *txt)
 {
 	struct tpm_chip *tpm;
 	int rc;

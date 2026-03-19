@@ -209,6 +209,8 @@ struct sl_ap_wake_info *slaunch_get_ap_wake_info(void);
 struct acpi_table_header *slaunch_get_dmar_table(struct acpi_table_header *dmar);
 void __noreturn slaunch_reset(void *ctx, const char *msg, u64 error);
 void slaunch_finalize(int do_sexit);
+struct txt_heap_info *slaunch_txt_get_heap_map(void);
+void *slaunch_txt_get_heap_table(void *heap, u8 index);
 
 static inline bool slaunch_is_txt_launch(void)
 {
